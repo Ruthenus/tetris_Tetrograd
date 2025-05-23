@@ -24,6 +24,7 @@
     <ClInclude Include="tetrograd_functions.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="main.cpp" />
     <ClCompile Include="tetrograd_game.cpp" />
     <ClCompile Include="tetrograd_utils.cpp" />
   </ItemGroup>
