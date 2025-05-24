@@ -2,6 +2,8 @@
 #include <iostream>
 #include <cstdlib>  // srand(), rand()
 #include <ctime>    // time()
+#include <cstdio>
+#include <cerrno>
 
 using namespace std;
 
@@ -263,16 +265,63 @@ void util_GetConsoleSize(HANDLE h, short& outWidth, short& outHeight)
 }
 
 
-// Завантаження рекордного рахунку
-int util_LoadHighScore()  // тема наступного домашнього завдання
+/**
+ * Функція завантаження рекордного рахунку з файлу, яка відкриває файл 
+ * highscore.txt у режимі читання, зчитує перший рядок як ціле число 
+ * (рекордний рахунок) і повертає його. Якщо файл не існує, порожній 
+ * або зчитування неможливе, повертається 0.
+ * Return: int. Рекордний рахунок або 0 у разі помилки чи відсутності файлу.
+ */
+int util_LoadHighScore()
 {
-    // Функція залишена для сумісності, але не виконує жодних дій
-    return 0;
+    int highScore = 0;  // значення за замовчуванням
+    FILE* file = nullptr;
+    errno_t err;
+    // https://learn.microsoft.com/en-en/cpp/c-runtime-library/errno-constants?view=msvc-170
+
+    // Відкриваємо файл для читання
+    err = fopen_s(&file, "highscore.txt", "r");
+    // https://en.cppreference.com/w/c/io/fopen
+
+    // Перевіряємо, чи файл успішно відкрито
+    if (err == 0 && file != nullptr) {
+        // Зчитуємо ціле число з файлу
+        // https://en.cppreference.com/w/c/io/fscanf
+        if (fscanf_s(file, "%d", &highScore) != 1) {
+            highScore = 0;  // якщо зчитування не вдалося, повертаємо 0
+        }
+        fclose(file);  // закриваємо файл, щоб уникнути витоків пам'яті
+    }
+    // Якщо файл не відкрито (не існує або помилка доступу), повертаємо 0
+
+    return highScore;
 }
 
 
 // Збереження рекордного рахунку
-void util_SaveHighScore(const GameStats& stats)  // тема наступного ДЗ
+/**
+ * Функція збереження рекордного рахунку у файл, яка відкриває файл 
+ * highscore.txt у режимі запису, записує поточний рекордний рахунок 
+ * (stats.highScore) як ціле число. Якщо файл не вдається відкрити, 
+ * функція завершується без помилок.
+ * Параметри функкції:
+ * - stats: константне посилання на структуру GameStats.
+ * Return: немає (void).
+ */
+void util_SaveHighScore(const GameStats& stats)
 {
-    // Функція залишена для сумісності, але не виконує жодних дій
+    FILE* file = nullptr;
+    errno_t err;
+
+    // Відкриваємо файл для запису
+    err = fopen_s(&file, "highscore.txt", "w");
+
+    // Перевіряємо, чи файл успішно відкрито
+    if (err == 0 && file != nullptr) {
+        // Записуємо рекордний рахунок у файл
+        fprintf(file, "%d", stats.highScore);
+        // https://codelessons.dev/ru/fprintf-in-c-cplusplus/
+        fclose(file);
+    }
+    // Якщо файл не відкрито, завершуємо функцію без помилок
 }
