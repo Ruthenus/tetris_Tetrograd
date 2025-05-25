@@ -661,7 +661,8 @@ void v4_DrawControls(HANDLE h, COORD ctrlPos)
 
 /**
  * Функція порядкового відображення статистики гри (рахунок, рівень,
- * рекорд) у консолі на заданій позиції.
+ * рекорд) у консолі на заданій позиції. Перед тим очищає область 
+ * статистики від артефактів.
  * Параметри функції:
  * - h: дескриптор консолі для виведення статистики;
  * - stats: константне посилання на структуру GameStats;
@@ -670,6 +671,12 @@ void v4_DrawControls(HANDLE h, COORD ctrlPos)
  */
 void v4_DrawStatistics(HANDLE h, const GameStats& stats, COORD statsPos)
 {
+    // Очищення області статистики
+    for (short y = 0; y < 3; y++) {
+        util_ShowText(h, statsPos.X, statsPos.Y + y, string(35, ' '), 
+            Color::BLACK);
+    }
+    // Відображення нової статистики
     util_ShowText(h, statsPos.X, statsPos.Y,
         "Рахунок: " + to_string(stats.score), Color::BRIGHT_WHITE);
     util_ShowText(h, statsPos.X, statsPos.Y + 1,

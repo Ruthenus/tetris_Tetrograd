@@ -43,7 +43,8 @@ int main()
     // Отримання дескриптора консолі для виведення графіки та тексту
     HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
     if (h == INVALID_HANDLE_VALUE) {
-        cerr << "Помилка отримання дескриптора консолі!\n";
+        util_ShowText(h, 0, 1, "Помилка отримання дескриптора консолі!\n",
+            Color::WHITE);
         return 1;
     }
 
@@ -84,7 +85,8 @@ int main()
     // Створення ігрової мозаїки - динамічного масиву кольорів
     Color** mosaic = v4_CreateMosaic(cup);
     if (!mosaic) {
-        cerr << "Помилка створення мозаїки!\n";
+        util_ShowText(h, 0, 1, "Помилка створення мозаїки!", Color::RED);
+        Sleep(3000);  // затримка 3 с для відображення повідомлення
         util_RestoreConsoleState(h);
         return 1;
     }
@@ -92,7 +94,8 @@ int main()
     // Ініціалізація статистики гри (рахунок, рекорд, рівень)
     GameStats stats = { 0, util_LoadHighScore(), 1 };
     if (stats.highScore == -1) {
-        cerr << "Помилка завантаження рекорду! Встановлено 0.\n";
+        util_ShowText(h, 0, 1,
+            "Помилка завантаження рекорду! Встановлено 0.\n", Color::WHITE);
         stats.highScore = 0;
     }
 
@@ -104,18 +107,15 @@ int main()
     DWORD tick = TetrisConstants::INITIAL_TICK;  // інтервал падіння
     bool gameOver = false;
 
-    // Ініціалізація статичного покажчика для обробника сигналів
-    static GameStats* activeStats = nullptr;
-    util_InitHandlerStats(&stats, &activeStats);
-
-    // main створює activeStats, util_InitHandlerStats оновлює 
-    // activeStats, util_ConsoleHandler використовує activeStats 
-    // для збереження рекордів.
+    // Ініціалізація змінної activeStats у файлі tetrograd_utils.cpp
+    util_InitHandlerStats(&stats);  // до встановлення обробника!
 
     // Установлення обробника сигналів консолі
     if (!SetConsoleCtrlHandler(util_ConsoleHandler, TRUE)) {
-        cerr << "Помилка встановлення обробника сигналів!\n";
         v4_DeleteMosaic(mosaic, cup.height);
+        util_ShowText(h, 0, 1, "Помилка встановлення обробника сигналів!",
+            Color::RED);
+        Sleep(3000);
         util_RestoreConsoleState(h);
         return 1;
     }
@@ -175,6 +175,11 @@ restart:  // мітка для перезапуску ретро-гри
                 break;
             case Key::PAUSE:  // ЛОГІКА ПАУЗИ
             {
+                // Збереження досягнень на всяк випадок:
+                if (stats.score >= stats.highScore) {  // не '>' !!!
+                    stats.highScore = stats.score;
+                    util_SaveHighScore(stats);
+                }
                 // Установлення позиції повідомлення про паузу
                 short pauseX = cup.startX - 20;  // має бути константа...
                 short pauseY = cup.startY + cup.height * 1 / 3;
@@ -205,6 +210,14 @@ restart:  // мітка для перезапуску ретро-гри
                     for (short x = 0; x < cup.width; x++) {
                         mosaic[y][x] = Color::BLACK;
                     }
+                }
+                // Очищення області бонусного повідомлення
+                util_ShowText(h, bonusPos.X, bonusPos.Y, string(9, ' '),
+                    Color::BLACK);
+                // Збереження досягнень на всяк випадок:
+                if (stats.score >= stats.highScore) {  // не '>' !!!
+                    stats.highScore = stats.score;
+                    util_SaveHighScore(stats);
                 }
                 // Скидання статистики
                 stats.score = 0;
@@ -260,7 +273,8 @@ restart:  // мітка для перезапуску ретро-гри
     } while (!gameOver);
 
     // Оновлення рекорду, збереження у файл
-    if (stats.score > stats.highScore) {
+    if (stats.score >= stats.highScore) {  // не '>' !!!
+        // Оператор порівняння '>=' гарантує створення файлу в першій грі!
         stats.highScore = stats.score;
         util_SaveHighScore(stats);
     }
@@ -305,7 +319,7 @@ restart:  // мітка для перезапуску ретро-гри
         v4_DrawStatistics(h, stats, statsPos);
 
         // Очищення області бонусного привітання
-        util_ShowText(h, bonusPos.X, bonusPos.Y, "       ", Color::BLACK);
+        util_ShowText(h, bonusPos.X, bonusPos.Y, string(9, ' '), Color::BLACK);
         // https://en.cppreference.com/w/cpp/language/goto
         goto restart;  // повернення до основного циклу!
     }

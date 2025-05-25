@@ -1,11 +1,15 @@
 #include "tetrograd_functions.h"
 #include <iostream>
-#include <cstdlib>  // srand(), rand()
-#include <ctime>    // time()
-#include <cstdio>
-#include <cerrno>
+#include <cstdlib>   // srand(), rand()
+#include <ctime>     // time()
+#include <cstdio>    // FILE, fopen_s, fscanf_s, fprintf, fclose
+#include <cerrno>    // errno_t
+#include <direct.h>  // _mkdir
 
 using namespace std;
+
+// Статична змінна в межах файлу tetrograd_utils.cpp
+static GameStats* activeStats = nullptr;
 
 
 /**
@@ -98,10 +102,7 @@ void util_SetConsoleOptions(HANDLE h)
 */
 BOOL WINAPI util_ConsoleHandler(DWORD signal)
 // https://learn.microsoft.com/en-en/windows/console/handlerroutine
-{
-    // Статичний покажчик на GameStats, оголошений усередині функції
-    static GameStats* activeStats = nullptr;
-
+{  // на жаль, у подібних функцій може бути тільки один параметр
     // Отримуємо дескриптор стандартного виводу консолі для відновлення 
     // стану консолі перед завершенням програми
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -110,11 +111,24 @@ BOOL WINAPI util_ConsoleHandler(DWORD signal)
         return FALSE;  // якщо консоль недоступна
     }
 
-    // Перевірка на nullptr перед використанням
+    // Діагностика: перевірка доступності activeStats
     if (!activeStats) {
+        util_ShowText(hConsole, 0, 1, 
+            "Помилка: activeStats == nullptr у util_ConsoleHandler", 
+            Color::RED);
+        Sleep(3000);
         util_RestoreConsoleState(hConsole);
-        return FALSE;
+        ExitProcess(0);
+        return TRUE;
     }
+
+    //// Діагностика: вивід поточної статистики
+    //string statsMsg = "Signal: " + to_string(signal) +
+    //    ", score=" + to_string(activeStats->score) +
+    //    ", highScore=" + to_string(activeStats->highScore) +
+    //    ", level=" + to_string(activeStats->level);
+    //util_ShowText(hConsole, 0, 1, statsMsg, Color::YELLOW);
+    //Sleep(5000);
 
     // Аналізуємо тип сигналу для вибору відповідної логіки обробки:
     switch (signal) {
@@ -122,12 +136,11 @@ BOOL WINAPI util_ConsoleHandler(DWORD signal)
     case CTRL_C_EVENT:  // сигнал Ctrl+C переривання поточної задачі
     case CTRL_BREAK_EVENT:  // сигнал Ctrl+Break, якщо є клавіша Break
         // Дублюємо логіку збереження рекорду з main():
-        if (activeStats->score > activeStats->highScore) {
+        if (activeStats->score >= activeStats->highScore) {
             activeStats->highScore = activeStats->score;
             util_SaveHighScore(*activeStats);
         }
-        SetConsoleOutputCP(1251);
-        // Відновлюємо початковий стан консолі
+        // Відновлюємо стан консолі перед завершенням
         util_RestoreConsoleState(hConsole);
         // Завершуємо процес із кодом 0 (успішне завершення)
         ExitProcess(0);
@@ -135,16 +148,16 @@ BOOL WINAPI util_ConsoleHandler(DWORD signal)
         break;
         // Обробка сигналу закриття вікна консолі натисканням кнопки "X"
     case CTRL_CLOSE_EVENT:  // штатне закриття консолі користувачем
-        if (activeStats->score > activeStats->highScore) {
+        if (activeStats->score >= activeStats->highScore) {
             activeStats->highScore = activeStats->score;
             util_SaveHighScore(*activeStats);
         }
         SetConsoleOutputCP(1251);
         util_RestoreConsoleState(hConsole);
-        // Додаємо мінімальну затримку (0.5 секунди) для надійного 
-        // завершення операцій збереження у файл. Відомо: Windows 
-        // обмежує обробку CTRL_CLOSE_EVENT до ~5 секунд.
-        Sleep(500);
+        // Додаємо затримку (1 секунду) для надійного завершення 
+        // операцій збереження у файл. Відомо: Windows обмежує 
+        // обробку CTRL_CLOSE_EVENT до ~5 секунд.
+        Sleep(1000);
         ExitProcess(0);  // відтак завершуємо процес
         break;
         // Обробка системних подій: вихід, вимкнення, перезавантаження
@@ -172,22 +185,17 @@ BOOL WINAPI util_ConsoleHandler(DWORD signal)
 
 /**
  * Допоміжна функція ініціалізації статистики для обробника.
- * Ініціалізує покажчик на структуру GameStats, присвоюючи йому адресу
- * переданої структури stats. Запобігає витокам пам'яті.
+ * Ініціалізує статичну змінну activeStats, присвоюючи їй адресу
+ * переданої структури stats.
  * Параметри функції:
- * - stats: покажчик на структуру GameStats, що містить статистику гри;
- * - activeStats: подвійний покажчик на структуру GameStats, що
- * буде оновлено, зберігаючи адресу stats для подальшого використання.
+ * - stats: покажчик на структуру GameStats, що містить статистику гри.
  */
-void util_InitHandlerStats(GameStats* stats, GameStats** activeStats)
+void util_InitHandlerStats(GameStats* stats)
 {
     // Запобігання використанню нульових покажчиків
-    if (!stats || !activeStats) return;
-    // Пряме присвоєння через покажчик на покажчик
-    *activeStats = stats;
-    // Тепер activeStats вказує на ту ж область пам’яті, що і stats.
-    // Операція дозволяє змінити значення покажчика поза межами функції, 
-    // що корисно для керування станом гри.
+    if (!stats) return;
+    // Присвоєння статичній змінній activeStats
+    activeStats = stats;
 }
 
 
@@ -267,43 +275,44 @@ void util_GetConsoleSize(HANDLE h, short& outWidth, short& outHeight)
 
 /**
  * Функція завантаження рекордного рахунку з файлу, яка відкриває файл 
- * highscore.txt у режимі читання, зчитує перший рядок як ціле число 
+ * TetroStat.txt у режимі читання, зчитує перший рядок як ціле число 
  * (рекордний рахунок) і повертає його. Якщо файл не існує, порожній 
- * або зчитування неможливе, повертається 0.
- * Return: int. Рекордний рахунок або 0 у разі помилки чи відсутності файлу.
+ * або зчитування неможливе, повертається -1.
+ * Return: int. Рекордний рахунок або -1 у разі помилки чи відсутності файлу.
  */
 int util_LoadHighScore()
 {
     int highScore = 0;  // значення за замовчуванням
     FILE* file = nullptr;
-    errno_t err;
+    errno_t readError;
     // https://learn.microsoft.com/en-en/cpp/c-runtime-library/errno-constants?view=msvc-170
 
-    // Відкриваємо файл для читання
-    err = fopen_s(&file, "highscore.txt", "r");
+    // Відкриваємо файл для читання зі створеної теки C:\Tetrograd
+    readError = fopen_s(&file, "C:\\Tetrograd\\TetroStat.txt", "r");
     // https://en.cppreference.com/w/c/io/fopen
 
     // Перевіряємо, чи файл успішно відкрито
-    if (err == 0 && file != nullptr) {
+    if (readError == 0 && file != nullptr) {
         // Зчитуємо ціле число з файлу
         // https://en.cppreference.com/w/c/io/fscanf
         if (fscanf_s(file, "%d", &highScore) != 1) {
-            highScore = 0;  // якщо зчитування не вдалося, повертаємо 0
+            highScore = -1;  // якщо зчитування не вдалося
         }
         fclose(file);  // закриваємо файл, щоб уникнути витоків пам'яті
     }
-    // Якщо файл не відкрито (не існує або помилка доступу), повертаємо 0
+    // Якщо файл не відкрито (не існує або помилка доступу), повертаємо -1
 
     return highScore;
 }
 
 
-// Збереження рекордного рахунку
 /**
- * Функція збереження рекордного рахунку у файл, яка відкриває файл 
- * highscore.txt у режимі запису, записує поточний рекордний рахунок 
- * (stats.highScore) як ціле число. Якщо файл не вдається відкрити, 
- * функція завершується без помилок.
+ * Функція збереження рекордного рахунку у файл у теці на диску C.
+ * Створює теку Tetrograd, якщо вона не існує, відкриває файл 
+ * TetroStat.txt у режимі запису, записує поточний рекордний рахунок 
+ * (stats.highScore) як ціле число. Якщо файл або теку не вдається 
+ * створити/відкрити, функція завершується без помилок.
+ * Безпосередньо на диску С не можна створити файл, лише теку в корені.
  * Параметри функкції:
  * - stats: константне посилання на структуру GameStats.
  * Return: немає (void).
@@ -311,17 +320,25 @@ int util_LoadHighScore()
 void util_SaveHighScore(const GameStats& stats)
 {
     FILE* file = nullptr;
-    errno_t err;
+    errno_t writeError;
 
-    // Відкриваємо файл для запису
-    err = fopen_s(&file, "highscore.txt", "w");
+    // Створюємо теку C:\Tetrograd, якщо вона не існує
+    int dirError = _mkdir("C:\\Tetrograd");
+    // https://gist.github.com/sunmeat/06b48b8e00a14f775dcfb949020032d1
+    // До цієї теки покладемо консольний додаток Tetrograd_v4.exe
+
+    // Відкриваємо файл для запису у теці C:\Tetrograd
+    writeError = fopen_s(&file, "C:\\Tetrograd\\TetroStat.txt", "w");
 
     // Перевіряємо, чи файл успішно відкрито
-    if (err == 0 && file != nullptr) {
+    if (writeError == 0 && file != nullptr) {
         // Записуємо рекордний рахунок у файл
         fprintf(file, "%d", stats.highScore);
-        // https://codelessons.dev/ru/fprintf-in-c-cplusplus/
+        // https://en.cppreference.com/w/c/io/fprintf
+        // Забезпечуємо запис даних у файл
+        fflush(file);  // https://en.cppreference.com/w/c/io/fflush
         fclose(file);
     }
-    // Якщо файл не відкрито, завершуємо функцію без помилок
+    // Якщо теку не створено або файл не відкрито, 
+    // функція завершується без помилок
 }

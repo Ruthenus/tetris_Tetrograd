@@ -23,7 +23,7 @@ Tetromino v4_CreateTetromino(Type type, const Glass& cup);
 int util_LoadHighScore();
 
 // 6. Ініціалізація ігрової статистики для обробника сигналів консолі
-void util_InitHandlerStats(GameStats* stats, GameStats** activeStats);
+void util_InitHandlerStats(GameStats* stats);
 
 // 7. Обробник сигналів консолі Windows (Ctrl+C, закриття вікна тощо)
 BOOL WINAPI util_ConsoleHandler(DWORD signal);
