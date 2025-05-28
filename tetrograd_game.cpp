@@ -108,10 +108,10 @@ Tetromino v4_CreateTetromino(Type type, const Glass& cup)
         */
     case Type::S:
         tm.color = Color::GREEN;  // ретро-ефекти вимкнено? LIGHT_GREEN
-        tm.squares[0] = { 1, 2 };
-        tm.squares[1] = { 0, 2 };  // центр обертання
-        tm.squares[2] = { 0, 3 };
-        tm.squares[3] = { 1, 1 };
+        tm.squares[0] = { 2, 1 };
+        tm.squares[1] = { 1, 1 };  // центр обертання
+        tm.squares[2] = { 1, 2 };
+        tm.squares[3] = { 0, 2 };
         break;
         /*
           | 0 1 2 3 4
