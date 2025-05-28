@@ -117,9 +117,9 @@ Tetromino v4_CreateTetromino(Type type, const Glass& cup)
           | 0 1 2 3 4
          -------------
          0|
-         1|   3
-         2| 1 0
-         3| 2
+         1|   1 0
+         2| 3 2
+         3|
          4|
         */
     case Type::Z:
